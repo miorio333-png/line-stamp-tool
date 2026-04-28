@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINEスタンプ作成ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f0f4f8; color: #333; }
+
+header { background: #0f7dc2; color: white; padding: 16px 24px; text-align: center; }
+header h1 { font-size: 1.4rem; margin-bottom: 4px; }
+header p  { font-size: 0.85rem; opacity: 0.9; }
+
+.steps {
+  display: flex; justify-content: center; gap: 5px;
+  padding: 12px 8px; flex-wrap: wrap;
+  background: white; border-bottom: 1px solid #eee;
+}
+.step-btn {
+  padding: 7px 11px; border: 2px solid #ddd; border-radius: 20px;
+  background: white; cursor: pointer; font-size: 0.75rem;
+  line-height: 1.4; text-align: center; transition: all 0.2s;
+}
+.step-btn.active { background: #0f7dc2; border-color: #0f7dc2; color: white; }
+
+.step-panel { display: none; max-width: 860px; margin: 0 auto; padding: 16px; }
+.step-panel.active { display: block; }
+
+.card {
+  background: white; border-radius: 12px; padding: 20px;
+  margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.card h2 {
+  font-size: 1.05rem; color: #0f7dc2; margin-bottom: 12px;
+  padding-bottom: 8px; border-bottom: 2px solid #e0f0fc;
+}
+
+.dropzone {
+  border: 2px dashed #ccc; border-radius: 8px; padding: 24px 16px;
+  text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.dropzone:hover, .dropzone.dragover { border-color: #0f7dc2; background: #f0f7fd; }
+.dropzone input { display: none; }
+
+.checker-bg {
+  margin-top: 10px; border: 1px solid #ddd; border-radius: 8px; position: relative;
+  background: #bbb url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='10' height='10' fill='%23999'/%3E%3Crect x='10' y='10' width='10' height='10' fill='%23999'/%3E%3C/svg%3E");
+}
+.checker-bg canvas.main-cv { display:block; width:100%; border-radius:8px; }
+.checker-bg canvas.mask-ov { position:absolute; top:0; left:0; width:100%; height:100%; border-radius:8px; pointer-events:none; }
+
+.btn {
+  padding: 8px 16px; border: none; border-radius: 8px;
+  cursor: pointer; font-size: 0.88rem; transition: all 0.2s; white-space: nowrap;
+}
+.btn-blue  { background: #0f7dc2; color: white; }
+.btn-blue:hover { background: #0c6aa8; }
+.btn-gray  { background: #f0f0f0; color: #333; }
+.btn-gray:hover  { background: #e0e0e0; }
+.btn-large { padding: 14px 36px; font-size: 1.1rem; font-weight: bold; border-radius: 12px; }
+
+.brush-btn {
+  padding: 6px 13px; border: 2px solid #ddd; border-radius: 8px;
+  cursor: pointer; font-size: 0.82rem; background: white; transition: all 0.2s;
+}
+.brush-btn.active { border-color: #0f7dc2; background: #e0f0fc; font-weight: bold; }
+
+.brush-panel {
+  background: #f0f8ff; border: 1px solid #c5dff8;
+  border-radius: 10px; padding: 12px 16px; margin-bottom: 14px;
+}
+.brush-panel h3 { font-size: 0.88rem; color: #1565c0; margin-bottom: 10px; }
+.brush-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+.tol-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: #f7f7f7; border-radius: 8px; margin-bottom: 8px;
+}
+.tol-row label { font-size: 0.85rem; color: #555; white-space: nowrap; }
+.tol-row input[type="range"] { flex: 1; accent-color: #0f7dc2; }
+.tol-row span  { font-size: 0.85rem; color: #333; width: 26px; text-align: right; }
+
+.mask-info {
+  display: block; font-size: 0.78rem; color: #999;
+  padding: 5px 10px; margin-top: 6px;
+  background: #fffbe6; border: 1px solid #ffe082; border-radius: 6px;
+  min-height: 28px;
+}
+
+.sheet-label { font-size: 0.9rem; font-weight: bold; color: #444; margin-bottom: 8px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.grid-container { position: relative; }
+.grid-canvas { width: 100%; display: block; }
+.grid-overlay-abs { position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+
+/* スタンプはサムネが横長（370:320） */
+.thumbs-grid {
+  display: grid; grid-template-columns: repeat(8,1fr); gap: 4px; margin-top: 12px;
+}
+.thumb-item {
+  position: relative; cursor: pointer; border: 3px solid transparent;
+  border-radius: 6px; overflow: hidden; aspect-ratio: 37 / 32;
+  background: #ccc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Crect width='5' height='5' fill='%23aaa'/%3E%3Crect x='5' y='5' width='5' height='5' fill='%23aaa'/%3E%3C/svg%3E");
+  transition: border-color 0.15s;
+}
+.thumb-item:hover { border-color: #0f7dc2; }
+.thumb-item.sel-main { border-color: #2e7d32; }
+.thumb-item.sel-tab  { border-color: #ff6600; }
+.thumb-item canvas { width:100%; height:100%; display:block; object-fit:contain; }
+.thumb-num {
+  position: absolute; bottom:0; right:0;
+  background: rgba(0,0,0,0.55); color: white; font-size: 9px;
+  padding: 1px 3px; border-radius: 3px 0 0 0;
+}
+.thumb-badge {
+  position: absolute; top:0; left:0;
+  font-size: 10px; padding: 1px 4px; border-radius: 3px 0 0 0;
+  font-weight: bold;
+}
+.badge-main { background: #2e7d32; color: white; }
+.badge-tab  { background: #ff6600; color: white; }
+
+.nav-buttons { display: flex; justify-content: space-between; margin-top: 16px; }
+
+.status { padding: 10px 14px; border-radius: 8px; margin-top: 10px; font-size: 0.88rem; }
+.status-info { background: #e8f4fd; color: #1565c0; }
+.status-ok   { background: #e8f8ef; color: #2e7d32; }
+.status-err  { background: #fdecea; color: #c62828; }
+
+.zip-table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+.zip-table td { padding:7px 12px; border-bottom:1px solid #eee; font-size:0.88rem; }
+.zip-table td:first-child { color:#666; width:40%; }
+
+.note { font-size: 0.82rem; color: #888; margin-top: 6px; }
+
+.slider-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.slider-row label { width:52px; text-align:right; font-size:0.85rem; color:#555; flex-shrink:0; }
+.slider-row input[type="range"] { flex:1; accent-color:#0f7dc2; }
+.slider-row span { width:28px; text-align:right; font-size:0.85rem; color:#333; flex-shrink:0; }
+
+.split-done-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; background: #e8f8ef; border: 1px solid #c8ecd7;
+  border-radius: 20px; font-size: 0.85rem; color: #2e7d32; margin-bottom: 10px;
+}
+
+.sel-mode-btn {
+  padding: 8px 16px; border: 2px solid #ddd; border-radius: 8px;
+  cursor: pointer; font-size: 0.85rem; background: white; transition: all 0.2s;
+}
+.sel-mode-btn.active-main { border-color: #2e7d32; background: #e8f8ef; font-weight: bold; color: #2e7d32; }
+.sel-mode-btn.active-tab  { border-color: #ff6600; background: #fff3e0; font-weight: bold; color: #ff6600; }
+
+input[type="range"] { accent-color: #0f7dc2; }
+input[type="number"] {
+  width: 68px; padding: 4px 6px; border: 1px solid #ddd;
+  border-radius: 6px; font-size: 0.88rem; text-align: center;
+}
+
+@media (max-width: 600px) {
+  .two-col { grid-template-columns: 1fr; }
+  .thumbs-grid { grid-template-columns: repeat(5,1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🖼️ LINEスタンプ作成ツール</h1>
+  <p>シートA透過 → シートB透過 → 読込確認 → A分割 → B分割 → 画像選択 → ZIP</p>
+</header>
+
+<div class="steps">
+  <button class="step-btn active" id="tab0" onclick="goStep(0)">STEP 0<br>シートA透過</button>
+  <button class="step-btn"        id="tab1" onclick="goStep(1)">STEP 1<br>シートB透過</button>
+  <button class="step-btn"        id="tab2" onclick="goStep(2)">STEP 2<br>読込確認</button>
+  <button class="step-btn"        id="tab3" onclick="goStep(3)">STEP 3<br>シートA分割</button>
+  <button class="step-btn"        id="tab4" onclick="goStep(4)">STEP 4<br>シートB分割</button>
+  <button class="step-btn"        id="tab5" onclick="goStep(5)">STEP 5<br>画像選択</button>
+  <button class="step-btn"        id="tab6" onclick="goStep(6)">STEP 6<br>ZIP出力</button>
+</div>
+
+<!-- ======================================================
+     STEP 0：シートA 背景透過
+     ====================================================== -->
+<div class="step-panel active" id="step-0">
+  <div class="card">
+    <h2>STEP 0：シートA の背景透過</h2>
+    <p class="note" style="margin-bottom:12px;">シートA（01〜20番）の画像を読み込んでください。自動で背景が透過されます。</p>
+
+    <div class="dropzone" id="drop0a" onclick="document.getElementById('file0a').click()">
+      <input type="file" id="file0a" accept="image/*" onchange="loadSheetImg(this,'A')">
+      <div id="drop0a-msg">
+        <div style="font-size:2.2rem;margin-bottom:6px;">🖼️</div>
+        <div><strong>シートAの画像をクリックまたはドロップ</strong></div>
+        <div class="note" style="margin-top:4px;">読み込むと自動で背景が透過されます</div>
+      </div>
+    </div>
+
+    <div id="editor-a" style="display:none;margin-top:16px;">
+      <div class="tol-row">
+        <label>透過の強さ：</label>
+        <input type="range" id="tol-a" min="0" max="100" value="30" step="1"
+          oninput="document.getElementById('tol-a-num').value=this.value; applyBG('A');">
+        <input type="number" id="tol-a-num" min="0" max="100" value="30" step="1"
+          style="width:54px;padding:3px 5px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:center;"
+          oninput="this.value=Math.min(100,Math.max(0,this.value||0)); document.getElementById('tol-a').value=this.value; applyBG('A');">
+      </div>
+
+      <div class="brush-panel">
+        <h3>🖌️ 保護ブラシ（透過が上手くいかない部分を手動修正）</h3>
+        <div class="brush-row">
+          <div style="display:flex;gap:6px;">
+            <button class="brush-btn active" id="a-b-none"    onclick="setBrush('A','none')">なし</button>
+            <button class="brush-btn"        id="a-b-protect" onclick="setBrush('A','protect')" style="color:#1565c0;">🟢 保護（透過させない）</button>
+            <button class="brush-btn"        id="a-b-erase"   onclick="setBrush('A','erase')"   style="color:#c62828;">🔴 消去（強制透過）</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:0.82rem;color:#555;">太さ：</label>
+            <input type="range" id="bsize-a" min="3" max="80" value="20" style="width:90px;"
+              oninput="document.getElementById('bsize-a-v').textContent=this.value">
+            <span id="bsize-a-v" style="font-size:0.82rem;width:22px;">20</span>
+          </div>
+        </div>
+        <div style="font-size:0.77rem;color:#888;margin-top:6px;">
+          🟢 塗ると透過されなくなります　／　🔴 塗った部分を強制的に透過します
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-gray" onclick="resetImg('A')">元画像に戻す</button>
+        <button class="btn btn-gray" onclick="clearMask('A')">🗑️ ブラシをリセット</button>
+      </div>
+
+      <div class="mask-info" id="mask-info-a"></div>
+
+      <div class="checker-bg">
+        <canvas id="cv0a" class="main-cv"></canvas>
+        <canvas id="ov0a" class="mask-ov"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <span></span>
+    <button class="btn btn-blue" onclick="reapplyAndCommit('A'); goStep(1);">STEP 1へ（シートB）→</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 1：シートB 背景透過
+     ====================================================== -->
+<div class="step-panel" id="step-1">
+  <div class="card">
+    <h2>STEP 1：シートB の背景透過</h2>
+    <p class="note" style="margin-bottom:12px;">シートB（21〜40番）の画像を読み込んでください。シートが1枚のみの場合はスキップしてください。</p>
+
+    <div class="dropzone" id="drop0b" onclick="document.getElementById('file0b').click()">
+      <input type="file" id="file0b" accept="image/*" onchange="loadSheetImg(this,'B')">
+      <div id="drop0b-msg">
+        <div style="font-size:2.2rem;margin-bottom:6px;">🖼️</div>
+        <div><strong>シートBの画像をクリックまたはドロップ</strong></div>
+        <div class="note" style="margin-top:4px;">読み込むと自動で背景が透過されます</div>
+      </div>
+    </div>
+
+    <div id="editor-b" style="display:none;margin-top:16px;">
+      <div class="tol-row">
+        <label>透過の強さ：</label>
+        <input type="range" id="tol-b" min="0" max="100" value="30" step="1"
+          oninput="document.getElementById('tol-b-num').value=this.value; applyBG('B');">
+        <input type="number" id="tol-b-num" min="0" max="100" value="30" step="1"
+          style="width:54px;padding:3px 5px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;text-align:center;"
+          oninput="this.value=Math.min(100,Math.max(0,this.value||0)); document.getElementById('tol-b').value=this.value; applyBG('B');">
+      </div>
+
+      <div class="brush-panel">
+        <h3>🖌️ 保護ブラシ（透過が上手くいかない部分を手動修正）</h3>
+        <div class="brush-row">
+          <div style="display:flex;gap:6px;">
+            <button class="brush-btn active" id="b-b-none"    onclick="setBrush('B','none')">なし</button>
+            <button class="brush-btn"        id="b-b-protect" onclick="setBrush('B','protect')" style="color:#1565c0;">🟢 保護（透過させない）</button>
+            <button class="brush-btn"        id="b-b-erase"   onclick="setBrush('B','erase')"   style="color:#c62828;">🔴 消去（強制透過）</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:0.82rem;color:#555;">太さ：</label>
+            <input type="range" id="bsize-b" min="3" max="80" value="20" style="width:90px;"
+              oninput="document.getElementById('bsize-b-v').textContent=this.value">
+            <span id="bsize-b-v" style="font-size:0.82rem;width:22px;">20</span>
+          </div>
+        </div>
+        <div style="font-size:0.77rem;color:#888;margin-top:6px;">
+          🟢 塗ると透過されなくなります　／　🔴 塗った部分を強制的に透過します
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-gray" onclick="resetImg('B')">元画像に戻す</button>
+        <button class="btn btn-gray" onclick="clearMask('B')">🗑️ ブラシをリセット</button>
+      </div>
+
+      <div class="mask-info" id="mask-info-b"></div>
+
+      <div class="checker-bg">
+        <canvas id="cv0b" class="main-cv"></canvas>
+        <canvas id="ov0b" class="mask-ov"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray"  onclick="goStep(0)">← STEP 0（シートA）</button>
+    <button class="btn btn-blue"  onclick="reapplyAndCommit('B'); goStep(2);">STEP 2へ（読込確認）→</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 2：読込確認
+     ====================================================== -->
+<div class="step-panel" id="step-2">
+  <div class="card">
+    <h2>STEP 2：シートの読込確認</h2>
+    <p class="note" style="margin-bottom:12px;">STEP 0・1で透過処理した画像が自動でセットされています。<br>透過なしの画像を使いたい場合はここで直接読み込めます。</p>
+
+    <div class="two-col">
+      <div>
+        <div class="sheet-label">🅰️ シートA（01〜20番）</div>
+        <div class="dropzone" id="drop1a" style="padding:16px 10px;" onclick="document.getElementById('file1a').click()">
+          <input type="file" id="file1a" accept="image/*" onchange="loadSheetDirect(this,'A')">
+          <div id="drop1a-msg">
+            <div style="font-size:1.4rem;margin-bottom:4px;">📄</div>
+            <div style="font-size:0.82rem;">クリックまたはドロップ</div>
+          </div>
+        </div>
+        <canvas id="canvas1a" style="display:none;width:100%;margin-top:8px;border:1px solid #ddd;border-radius:6px;"></canvas>
+      </div>
+      <div>
+        <div class="sheet-label">🅱️ シートB（21〜40番）</div>
+        <div class="dropzone" id="drop1b" style="padding:16px 10px;" onclick="document.getElementById('file1b').click()">
+          <input type="file" id="file1b" accept="image/*" onchange="loadSheetDirect(this,'B')">
+          <div id="drop1b-msg">
+            <div style="font-size:1.4rem;margin-bottom:4px;">📄</div>
+            <div style="font-size:0.82rem;">クリックまたはドロップ</div>
+          </div>
+        </div>
+        <canvas id="canvas1b" style="display:none;width:100%;margin-top:8px;border:1px solid #ddd;border-radius:6px;"></canvas>
+      </div>
+    </div>
+    <div id="sheet-status" style="margin-top:12px;"></div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray" onclick="goStep(1)">← STEP 1（シートB透過）</button>
+    <button class="btn btn-blue" onclick="goStep(3)">STEP 3へ（シートA分割）→</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 3：シートA グリッド分割
+     ====================================================== -->
+<div class="step-panel" id="step-3">
+  <div class="card">
+    <h2>STEP 3：シートA グリッド調整 &amp; 分割</h2>
+    <p class="note" style="margin-bottom:10px;">赤いグリッド線がスタンプの境界に合うよう調整して「分割する」を押してください。</p>
+    <div id="a-done-badge" style="display:none;" class="split-done-badge">✅ シートA 分割済み</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;"><label>列数：</label><input type="number" id="a-cols" value="5" min="1" max="40" oninput="updateGridA()" style="width:60px;"></div>
+      <div style="display:flex;align-items:center;gap:6px;"><label>行数：</label><input type="number" id="a-rows" value="4" min="1" max="40" oninput="updateGridA()" style="width:60px;"></div>
+    </div>
+    <div class="slider-row"><label>上余白</label><input type="range" id="a-mg-t" value="0" min="0" max="300" oninput="updateGridA();document.getElementById('a-v-mg-t').textContent=this.value"><span id="a-v-mg-t">0</span></div>
+    <div class="slider-row"><label>下余白</label><input type="range" id="a-mg-b" value="0" min="0" max="300" oninput="updateGridA();document.getElementById('a-v-mg-b').textContent=this.value"><span id="a-v-mg-b">0</span></div>
+    <div class="slider-row"><label>左余白</label><input type="range" id="a-mg-l" value="0" min="0" max="300" oninput="updateGridA();document.getElementById('a-v-mg-l').textContent=this.value"><span id="a-v-mg-l">0</span></div>
+    <div class="slider-row"><label>右余白</label><input type="range" id="a-mg-r" value="0" min="0" max="300" oninput="updateGridA();document.getElementById('a-v-mg-r').textContent=this.value"><span id="a-v-mg-r">0</span></div>
+    <div class="slider-row"><label>列間隔</label><input type="range" id="a-gap-h" value="0" min="0" max="100" oninput="updateGridA();document.getElementById('a-v-gap-h').textContent=this.value"><span id="a-v-gap-h">0</span></div>
+    <div class="slider-row"><label>行間隔</label><input type="range" id="a-gap-v" value="0" min="0" max="100" oninput="updateGridA();document.getElementById('a-v-gap-v').textContent=this.value"><span id="a-v-gap-v">0</span></div>
+    <div style="margin-top:12px;">
+      <div class="sheet-label">🅰️ シートA プレビュー</div>
+      <div style="border:1px solid #eee;border-radius:8px;background:#bbb;">
+        <div class="grid-container">
+          <canvas id="canvas2a" class="grid-canvas"></canvas>
+          <canvas id="overlay2a" class="grid-overlay-abs"></canvas>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#f0f7fd;border-radius:8px;border:1px solid #b3d4f0;">
+      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="a-auto-bg" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
+        <span>✅ 分割後に各セルの<strong>白背景を自動で透過</strong>する</span>
+      </label>
+      <div id="auto-bg-note-a" style="display:none;margin-top:6px;font-size:0.8rem;padding:6px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;">
+        ⚠️ STEP 0 で保護ブラシを使ったため、自動透過を <strong>OFF</strong> にしました。チェックを入れたままだと保護が無視されます。
+      </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.82rem;color:#555;">透過の強さ：</span>
+        <input type="range" id="a-cell-tol" min="0" max="80" value="30" style="flex:1;accent-color:#0f7dc2;" oninput="document.getElementById('a-v-cell-tol').textContent=this.value">
+        <span id="a-v-cell-tol" style="font-size:0.82rem;color:#333;width:24px;text-align:right;">30</span>
+      </div>
+      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <input type="checkbox" id="a-auto-fit" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
+        <span>🔍 余白を自動で詰めて<strong>イラストを最大化</strong>する（推奨）</span>
+      </label>
+      <div style="font-size:0.78rem;color:#888;margin-top:4px;">
+        透明ピクセルを除いた実体部分を検出し、370×320pxいっぱいに拡大します（安全余白10px）
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <button class="btn btn-blue" id="split-a-btn" onclick="splitSheet('A')">✂️ シートAを分割する</button>
+    </div>
+    <div id="split-a-msg" style="display:none;" class="status status-ok"></div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray" onclick="goStep(2)">← STEP 2</button>
+    <button class="btn btn-blue" onclick="goStep(4)">STEP 4へ →</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 4：シートB グリッド分割
+     ====================================================== -->
+<div class="step-panel" id="step-4">
+  <div class="card">
+    <h2>STEP 4：シートB グリッド調整 &amp; 分割</h2>
+    <p class="note" style="margin-bottom:10px;">赤いグリッド線がスタンプの境界に合うよう調整して「分割する」を押してください。シートBがない場合はスキップしてください。</p>
+    <div id="b-done-badge" style="display:none;" class="split-done-badge">✅ シートB 分割済み</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;"><label>列数：</label><input type="number" id="b-cols" value="5" min="1" max="40" oninput="updateGridB()" style="width:60px;"></div>
+      <div style="display:flex;align-items:center;gap:6px;"><label>行数：</label><input type="number" id="b-rows" value="4" min="1" max="40" oninput="updateGridB()" style="width:60px;"></div>
+    </div>
+    <div class="slider-row"><label>上余白</label><input type="range" id="b-mg-t" value="0" min="0" max="300" oninput="updateGridB();document.getElementById('b-v-mg-t').textContent=this.value"><span id="b-v-mg-t">0</span></div>
+    <div class="slider-row"><label>下余白</label><input type="range" id="b-mg-b" value="0" min="0" max="300" oninput="updateGridB();document.getElementById('b-v-mg-b').textContent=this.value"><span id="b-v-mg-b">0</span></div>
+    <div class="slider-row"><label>左余白</label><input type="range" id="b-mg-l" value="0" min="0" max="300" oninput="updateGridB();document.getElementById('b-v-mg-l').textContent=this.value"><span id="b-v-mg-l">0</span></div>
+    <div class="slider-row"><label>右余白</label><input type="range" id="b-mg-r" value="0" min="0" max="300" oninput="updateGridB();document.getElementById('b-v-mg-r').textContent=this.value"><span id="b-v-mg-r">0</span></div>
+    <div class="slider-row"><label>列間隔</label><input type="range" id="b-gap-h" value="0" min="0" max="100" oninput="updateGridB();document.getElementById('b-v-gap-h').textContent=this.value"><span id="b-v-gap-h">0</span></div>
+    <div class="slider-row"><label>行間隔</label><input type="range" id="b-gap-v" value="0" min="0" max="100" oninput="updateGridB();document.getElementById('b-v-gap-v').textContent=this.value"><span id="b-v-gap-v">0</span></div>
+    <div style="margin-top:12px;">
+      <div class="sheet-label">🅱️ シートB プレビュー</div>
+      <div style="border:1px solid #eee;border-radius:8px;background:#bbb;">
+        <div class="grid-container">
+          <canvas id="canvas2b" class="grid-canvas"></canvas>
+          <canvas id="overlay2b" class="grid-overlay-abs"></canvas>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:#f0f7fd;border-radius:8px;border:1px solid #b3d4f0;">
+      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="b-auto-bg" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
+        <span>✅ 分割後に各セルの<strong>白背景を自動で透過</strong>する</span>
+      </label>
+      <div id="auto-bg-note-b" style="display:none;margin-top:6px;font-size:0.8rem;padding:6px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;">
+        ⚠️ STEP 1 で保護ブラシを使ったため、自動透過を <strong>OFF</strong> にしました。チェックを入れたままだと保護が無視されます。
+      </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:0.82rem;color:#555;">透過の強さ：</span>
+        <input type="range" id="b-cell-tol" min="0" max="80" value="30" style="flex:1;accent-color:#0f7dc2;" oninput="document.getElementById('b-v-cell-tol').textContent=this.value">
+        <span id="b-v-cell-tol" style="font-size:0.82rem;color:#333;width:24px;text-align:right;">30</span>
+      </div>
+      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <input type="checkbox" id="b-auto-fit" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
+        <span>🔍 余白を自動で詰めて<strong>イラストを最大化</strong>する（推奨）</span>
+      </label>
+      <div style="font-size:0.78rem;color:#888;margin-top:4px;">
+        透明ピクセルを除いた実体部分を検出し、370×320pxいっぱいに拡大します（安全余白10px）
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <button class="btn btn-blue" id="split-b-btn" onclick="splitSheet('B')">✂️ シートBを分割する</button>
+    </div>
+    <div id="split-b-msg" style="display:none;" class="status status-ok"></div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray" onclick="goStep(3)">← STEP 3</button>
+    <button class="btn btn-blue" onclick="goStep(5)">STEP 5へ →</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 5：メイン画像 & タブ画像選択
+     ====================================================== -->
+<div class="step-panel" id="step-5">
+  <div class="card">
+    <h2>STEP 5：メイン画像 &amp; タブ画像の選択</h2>
+    <p class="note" style="margin-bottom:10px;">
+      <strong>🟩 メイン画像</strong>：LINEストアのサムネイルに使われます（240×240px に自動変換）<br>
+      <strong>🟧 タブ画像</strong>：トークルームのタブアイコンに使われます（96×74px に自動変換）<br>
+      同じスタンプを両方に選ぶことができます。
+    </p>
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="sel-mode-btn active-main" id="mode-main-btn" onclick="setSelMode('main')">🟩 メイン画像を選択中</button>
+      <button class="sel-mode-btn" id="mode-tab-btn"  onclick="setSelMode('tab')">🟧 タブ画像を選択</button>
+    </div>
+    <div id="split-banner" style="display:none;padding:10px 14px;background:#e8f4fd;border-radius:8px;margin-bottom:10px;font-size:0.85rem;color:#1565c0;"></div>
+    <div class="thumbs-grid" id="thumbs-grid"></div>
+    <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;">
+      <div id="main-ok" style="display:none;" class="status status-ok" style="flex:1;">
+        🟩 メイン画像：<strong id="main-name"></strong>
+      </div>
+      <div id="tab-ok" style="display:none;" class="status status-ok" style="flex:1;">
+        🟧 タブ画像：<strong id="tab-name"></strong>
+      </div>
+    </div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray" onclick="goStep(4)">← STEP 4</button>
+    <button class="btn btn-blue" onclick="goStep(6)">STEP 6へ →</button>
+  </div>
+</div>
+
+<!-- ======================================================
+     STEP 6：ZIP出力
+     ====================================================== -->
+<div class="step-panel" id="step-6">
+  <div class="card">
+    <h2>STEP 6：ZIP出力</h2>
+    <table class="zip-table">
+      <tr><td>スタンプサイズ</td><td>370 × 320 px（PNG）</td></tr>
+      <tr><td>メイン画像サイズ</td><td>240 × 240 px（main.png）</td></tr>
+      <tr><td>タブ画像サイズ</td><td>96 × 74 px（tab.png）</td></tr>
+      <tr><td>ファイル数</td><td id="z-count">－</td></tr>
+      <tr><td>メイン画像</td><td id="z-main">未選択</td></tr>
+      <tr><td>タブ画像</td><td id="z-tab">未選択</td></tr>
+    </table>
+    <p class="note" style="margin-bottom:12px;">
+      ⚠️ LINEへの申請に必要な枚数は <strong>8・16・24・32・40枚</strong> のいずれかです。<br>
+      合計枚数がこれ以外の場合はLINEに申請できません。
+    </p>
+    <div id="z-warn" style="display:none;" class="status status-err"></div>
+    <div style="text-align:center;margin-top:16px;">
+      <button class="btn btn-blue btn-large" onclick="downloadZip()">⬇️ ZIPをダウンロード</button>
+    </div>
+    <div id="z-status" style="display:none;" class="status"></div>
+  </div>
+  <div class="nav-buttons">
+    <button class="btn btn-gray" onclick="goStep(5)">← STEP 5</button>
+    <span></span>
+  </div>
+</div>
+
+<!-- ======================================================
+     JavaScript
+     ====================================================== -->
+<script>
+// ---- グローバル変数 ----
+const state = {
+  A: { origData: null, protMask: null, eraseMask: null, brush: 'none', painting: false },
+  B: { origData: null, protMask: null, eraseMask: null, brush: 'none', painting: false },
+};
+let sheetCvsA = null;
+let sheetCvsB = null;
+let cellsA    = [];
+let cellsB    = [];
+let mainIdx   = -1;  // メイン画像のインデックス
+let tabIdx    = -1;  // タブ画像のインデックス
+let selMode   = 'main'; // 'main' or 'tab'
+
+// スタンプサイズ定数
+const STAMP_W = 370;
+const STAMP_H = 320;
+
+function getAllCells() { return cellsA.concat(cellsB); }
+
+// ---- ステップ切り替え ----
+function goStep(n) {
+  const total = 7;
+  for (let i = 0; i < total; i++) {
+    document.getElementById('step-' + i).classList.toggle('active', i === n);
+    document.getElementById('tab'  + i).classList.toggle('active', i === n);
+  }
+  if (n === 3) initGrid('A');
+  if (n === 4) initGrid('B');
+  if (n === 5) renderThumbs();
+  if (n === 6) refreshZipInfo();
+}
+
+// ---- ユーティリティ ----
+function cloneID(id) { return new ImageData(new Uint8ClampedArray(id.data), id.width, id.height); }
+function isWhitePx(d, i, tol) {
+  if (d[i*4+3] < 10) return true;
+  return d[i*4] >= 255-tol && d[i*4+1] >= 255-tol && d[i*4+2] >= 255-tol;
+}
+function fitH(cv) { cv.style.height = 'auto'; }
+
+function setupDrop(id, cb) {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) cb(f);
+  });
+}
+setupDrop('drop0a', f => loadSheetImgFile(f, 'A'));
+setupDrop('drop0b', f => loadSheetImgFile(f, 'B'));
+setupDrop('drop1a', f => loadSheetDirectFile(f, 'A'));
+setupDrop('drop1b', f => loadSheetDirectFile(f, 'B'));
+
+// ======================================================
+// STEP 0・1：背景透過エディタ
+// ======================================================
+function loadSheetImg(inp, ab) { if (inp.files[0]) loadSheetImgFile(inp.files[0], ab); }
+
+function loadSheetImgFile(file, ab) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const cvId  = ab === 'A' ? 'cv0a' : 'cv0b';
+      const edId  = ab === 'A' ? 'editor-a' : 'editor-b';
+      const msgId = ab === 'A' ? 'drop0a-msg' : 'drop0b-msg';
+      const tolId = ab === 'A' ? 'tol-a' : 'tol-b';
+      const cv    = document.getElementById(cvId);
+      cv.width    = img.width;
+      cv.height   = img.height;
+      cv.getContext('2d').drawImage(img, 0, 0);
+      const s     = state[ab];
+      s.origData  = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height);
+      s.protMask  = new Uint8Array(cv.width * cv.height);
+      s.eraseMask = new Uint8Array(cv.width * cv.height);
+      document.getElementById(edId).style.display = 'block';
+      fitH(cv);
+      const ov = document.getElementById(ab === 'A' ? 'ov0a' : 'ov0b');
+      ov.width = 0;
+      updateMaskInfo(ab);
+      if (!cv.dataset.brushInit) { initBrushEvents(cvId, ab); cv.dataset.brushInit = '1'; }
+      const tol = parseInt(document.getElementById(tolId).value);
+      applyBGRemoval(cv, s.origData, tol, s.protMask, s.eraseMask);
+      document.getElementById(msgId).innerHTML =
+        `<div style="color:#0f7dc2;font-weight:bold;">✅ ${file.name}</div>
+         <div style="font-size:0.78rem;color:#555;margin-top:2px;">変更する場合は再度クリック</div>`;
+      commitSheet(ab);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyBGRemoval(cv, origData, tol, protMask, eraseMask) {
+  if (!origData) return;
+  const ctx = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  ctx.putImageData(cloneID(origData), 0, 0);
+  const id = ctx.getImageData(0, 0, w, h);
+  const d  = id.data;
+  if (eraseMask) for (let i = 0; i < w*h; i++) if (eraseMask[i]) d[i*4+3] = 0;
+  const vis = new Uint8Array(w * h);
+  const q   = [];
+  function tryAdd(x, y) {
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    const i = y * w + x;
+    if (vis[i] || (protMask && protMask[i])) return;
+    if (isWhitePx(d, i, tol)) { vis[i] = 1; q.push(i); }
+  }
+  for (let x = 0; x < w; x++) { tryAdd(x, 0); tryAdd(x, h-1); }
+  for (let y = 0; y < h; y++) { tryAdd(0, y); tryAdd(w-1, y); }
+  while (q.length) {
+    const i = q.shift();
+    if (!protMask || !protMask[i]) d[i*4+3] = 0;
+    const x = i % w, y = Math.floor(i / w);
+    tryAdd(x-1,y); tryAdd(x+1,y); tryAdd(x,y-1); tryAdd(x,y+1);
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+function applyBG(ab) {
+  const s = state[ab];
+  if (!s.origData) return;
+  const cv  = document.getElementById(ab === 'A' ? 'cv0a' : 'cv0b');
+  const tol = parseInt(document.getElementById(ab === 'A' ? 'tol-a' : 'tol-b').value);
+  applyBGRemoval(cv, s.origData, tol, s.protMask, s.eraseMask);
+}
+
+function resetImg(ab) {
+  const s = state[ab];
+  if (!s.origData) return;
+  document.getElementById(ab === 'A' ? 'cv0a' : 'cv0b')
+    .getContext('2d').putImageData(cloneID(s.origData), 0, 0);
+}
+
+function clearMask(ab) {
+  const s = state[ab];
+  if (!s.origData) return;
+  const n = s.origData.width * s.origData.height;
+  s.protMask  = new Uint8Array(n);
+  s.eraseMask = new Uint8Array(n);
+  applyBG(ab);
+  drawMaskOverlay(ab);
+  updateMaskInfo(ab);
+}
+
+function reapplyAndCommit(ab) {
+  applyBG(ab);
+  commitSheet(ab);
+  const s = state[ab];
+  const hasProtect = s.protMask && s.protMask.some(v => v > 0);
+  if (hasProtect) {
+    const chkId = ab === 'A' ? 'a-auto-bg' : 'b-auto-bg';
+    const chk = document.getElementById(chkId);
+    if (chk && chk.checked) {
+      chk.checked = false;
+      const noteId = ab === 'A' ? 'auto-bg-note-a' : 'auto-bg-note-b';
+      const note = document.getElementById(noteId);
+      if (note) { note.style.display = 'block'; note.style.color = '#e65100'; }
+    }
+  }
+}
+
+function commitSheet(ab) {
+  const cvSrc = document.getElementById(ab === 'A' ? 'cv0a' : 'cv0b');
+  if (!cvSrc.width) return;
+  const cvDst = document.getElementById(ab === 'A' ? 'canvas1a' : 'canvas1b');
+  const msgId = ab === 'A' ? 'drop1a-msg' : 'drop1b-msg';
+  cvDst.width = cvSrc.width; cvDst.height = cvSrc.height;
+  cvDst.getContext('2d').drawImage(cvSrc, 0, 0);
+  fitH(cvDst);
+  cvDst.style.display = 'block';
+  if (ab === 'A') sheetCvsA = cvDst; else sheetCvsB = cvDst;
+  document.getElementById(msgId).innerHTML =
+    `<div style="color:#0f7dc2;font-size:0.82rem;">✅ シート${ab} セット済み（STEP ${ab==='A'?0:1}より自動反映）</div>`;
+  updateSheetStatus();
+}
+
+// ---- 保護ブラシ ----
+function setBrush(ab, type) {
+  state[ab].brush = type;
+  const pfx = ab === 'A' ? 'a' : 'b';
+  ['none','protect','erase'].forEach(t =>
+    document.getElementById(`${pfx}-b-${t}`).classList.toggle('active', t === type)
+  );
+  const cv = document.getElementById(ab === 'A' ? 'cv0a' : 'cv0b');
+  cv.style.cursor = type === 'none' ? 'default' : 'crosshair';
+}
+
+function initBrushEvents(cvId, ab) {
+  const cv = document.getElementById(cvId);
+  const s  = state[ab];
+  const paint = e => {
+    if (s.brush === 'none' || !s.painting) return;
+    const rect = cv.getBoundingClientRect();
+    const scx  = cv.width  / rect.width;
+    const scy  = cv.height / rect.height;
+    const cx   = Math.round((e.clientX - rect.left) * scx);
+    const cy   = Math.round((e.clientY - rect.top)  * scy);
+    const r    = parseInt(document.getElementById(ab === 'A' ? 'bsize-a' : 'bsize-b').value);
+    const w = cv.width, h = cv.height;
+    const cur = s.brush === 'protect' ? s.protMask : s.eraseMask;
+    const opp = s.brush === 'protect' ? s.eraseMask : s.protMask;
+    let changed = false;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx*dx + dy*dy <= r*r) {
+          const nx = cx+dx, ny = cy+dy;
+          if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+            const i = ny*w+nx; cur[i]=1; opp[i]=0; changed=true;
+          }
+        }
+      }
+    }
+    if (changed) { applyBG(ab); drawMaskOverlay(ab); updateMaskInfo(ab); }
+  };
+  cv.addEventListener('mousedown',  e => { s.painting=true; paint(e); });
+  cv.addEventListener('mousemove',  e => { if(s.painting) paint(e); });
+  cv.addEventListener('mouseup',    () => s.painting=false);
+  cv.addEventListener('mouseleave', () => s.painting=false);
+  cv.addEventListener('touchstart', e => { e.preventDefault(); s.painting=true; paint(e.touches[0]); }, {passive:false});
+  cv.addEventListener('touchmove',  e => { e.preventDefault(); if(s.painting) paint(e.touches[0]); }, {passive:false});
+  cv.addEventListener('touchend',   () => s.painting=false);
+}
+
+function drawMaskOverlay(ab) {
+  const cvId = ab === 'A' ? 'cv0a' : 'cv0b';
+  const ovId = ab === 'A' ? 'ov0a' : 'ov0b';
+  const s    = state[ab];
+  const cv   = document.getElementById(cvId);
+  const ov   = document.getElementById(ovId);
+  ov.width   = cv.width; ov.height = cv.height;
+  ov.style.height = '';
+  const ctx  = ov.getContext('2d');
+  const id   = ctx.createImageData(ov.width, ov.height);
+  const d    = id.data;
+  const n    = ov.width * ov.height;
+  for (let i = 0; i < n; i++) {
+    if (s.protMask && s.protMask[i])        { d[i*4]=0;   d[i*4+1]=180; d[i*4+2]=0;   d[i*4+3]=100; }
+    else if (s.eraseMask && s.eraseMask[i]) { d[i*4]=220; d[i*4+1]=0;   d[i*4+2]=0;   d[i*4+3]=100; }
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+function updateMaskInfo(ab) {
+  const s  = state[ab];
+  const el = document.getElementById(ab === 'A' ? 'mask-info-a' : 'mask-info-b');
+  const pc = s.protMask  ? s.protMask.reduce( (a,v)=>a+v,0) : 0;
+  const ec = s.eraseMask ? s.eraseMask.reduce((a,v)=>a+v,0) : 0;
+  el.style.color = (pc === 0 && ec === 0) ? '#bbb' : '#555';
+  el.textContent = (pc === 0 && ec === 0)
+    ? '🟢 保護: 0px　🔴 消去: 0px　（ブラシで塗ると表示が変わります）'
+    : `🟢 保護: ${pc.toLocaleString()}px　🔴 消去: ${ec.toLocaleString()}px`;
+}
+
+// ======================================================
+// STEP 2：読込確認（直接読み込み）
+// ======================================================
+function loadSheetDirect(inp, ab) { if (inp.files[0]) loadSheetDirectFile(inp.files[0], ab); }
+
+function loadSheetDirectFile(file, ab) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.getElementById(ab === 'A' ? 'canvas1a' : 'canvas1b');
+      cv.width = img.width; cv.height = img.height;
+      cv.getContext('2d').drawImage(img, 0, 0);
+      fitH(cv); cv.style.display = 'block';
+      if (ab === 'A') sheetCvsA = cv; else sheetCvsB = cv;
+      document.getElementById(ab === 'A' ? 'drop1a-msg' : 'drop1b-msg').innerHTML =
+        `<div style="color:#0f7dc2;font-size:0.82rem;">✅ ${file.name}</div>`;
+      updateSheetStatus();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function updateSheetStatus() {
+  const el = document.getElementById('sheet-status');
+  if (!el) return;
+  const a = sheetCvsA ? '✅ シートA 読込済' : '⬜ シートA 未読込';
+  const b = sheetCvsB ? '✅ シートB 読込済' : '⬜ シートB 未読込（シートが1枚の場合は不要）';
+  const ok = sheetCvsA;
+  el.className = 'status ' + (ok ? 'status-ok' : 'status-info');
+  el.textContent = `${a}　　${b}`;
+}
+
+// ======================================================
+// STEP 3・4：グリッド分割
+// ======================================================
+function getGridParams(ab) {
+  const p = ab === 'A' ? 'a' : 'b';
+  return {
+    cols: parseInt(document.getElementById(`${p}-cols`).value)||5,
+    rows: parseInt(document.getElementById(`${p}-rows`).value)||4,
+    mgT:  parseInt(document.getElementById(`${p}-mg-t`).value)||0,
+    mgB:  parseInt(document.getElementById(`${p}-mg-b`).value)||0,
+    mgL:  parseInt(document.getElementById(`${p}-mg-l`).value)||0,
+    mgR:  parseInt(document.getElementById(`${p}-mg-r`).value)||0,
+    gapH: parseInt(document.getElementById(`${p}-gap-h`).value)||0,
+    gapV: parseInt(document.getElementById(`${p}-gap-v`).value)||0,
+  };
+}
+
+function initGrid(ab) {
+  const src  = ab === 'A' ? sheetCvsA : sheetCvsB;
+  const cvId = ab === 'A' ? 'canvas2a' : 'canvas2b';
+  if (src) {
+    const cv = document.getElementById(cvId);
+    cv.width = src.width; cv.height = src.height;
+    cv.getContext('2d').drawImage(src, 0, 0);
+    fitH(cv);
+  }
+  if (ab === 'A') updateGridA(); else updateGridB();
+}
+function updateGridA() { drawGridOverlay('canvas2a','overlay2a',getGridParams('A')); }
+function updateGridB() { drawGridOverlay('canvas2b','overlay2b',getGridParams('B')); }
+
+function drawGridOverlay(cvId, ovId, p) {
+  const cv = document.getElementById(cvId);
+  const ov = document.getElementById(ovId);
+  if (!cv.width) return;
+  ov.width = cv.width; ov.height = cv.height;
+  const cw = (cv.width  - p.mgL - p.mgR - p.gapH*(p.cols-1)) / p.cols;
+  const ch = (cv.height - p.mgT - p.mgB - p.gapV*(p.rows-1)) / p.rows;
+  const ctx = ov.getContext('2d');
+  ctx.clearRect(0,0,ov.width,ov.height);
+  ctx.strokeStyle='rgba(255,40,40,0.85)'; ctx.lineWidth=1.5;
+  for (let c=0;c<=p.cols;c++) {
+    const x=p.mgL+c*(cw+p.gapH);
+    ctx.beginPath();ctx.moveTo(x,p.mgT);ctx.lineTo(x,cv.height-p.mgB);ctx.stroke();
+  }
+  for (let r=0;r<=p.rows;r++) {
+    const y=p.mgT+r*(ch+p.gapV);
+    ctx.beginPath();ctx.moveTo(p.mgL,y);ctx.lineTo(cv.width-p.mgR,y);ctx.stroke();
+  }
+}
+
+function splitSheet(ab) {
+  const src = ab === 'A' ? sheetCvsA : sheetCvsB;
+  if (!src) { alert(`シート${ab}が読み込まれていません`); return; }
+  const btnId = ab === 'A' ? 'split-a-btn' : 'split-b-btn';
+  const btn   = document.getElementById(btnId);
+  btn.disabled = true; btn.textContent = '⏳ 分割中...';
+  setTimeout(() => {
+    const p       = getGridParams(ab);
+    const autoBG  = document.getElementById(ab==='A'?'a-auto-bg':'b-auto-bg').checked;
+    const autoFit = document.getElementById(ab==='A'?'a-auto-fit':'b-auto-fit').checked;
+    const tol     = parseInt(document.getElementById(ab==='A'?'a-cell-tol':'b-cell-tol').value)||30;
+    const cw = (src.width  - p.mgL - p.mgR - p.gapH*(p.cols-1)) / p.cols;
+    const ch = (src.height - p.mgT - p.mgB - p.gapV*(p.rows-1)) / p.rows;
+    const result = [];
+    for (let r=0; r<p.rows; r++) {
+      for (let c=0; c<p.cols; c++) {
+        const sx = p.mgL+c*(cw+p.gapH), sy = p.mgT+r*(ch+p.gapV);
+        const out = document.createElement('canvas');
+        out.width = STAMP_W; out.height = STAMP_H;
+        const ctx = out.getContext('2d');
+        ctx.clearRect(0,0,STAMP_W,STAMP_H);
+        // アスペクト比を維持しながら370×320に収める
+        const asp = cw / ch;
+        const targetAsp = STAMP_W / STAMP_H;
+        let dw, dh, dx, dy;
+        if (asp >= targetAsp) {
+          dw = STAMP_W; dh = Math.round(STAMP_W / asp);
+          dx = 0; dy = Math.round((STAMP_H - dh) / 2);
+        } else {
+          dh = STAMP_H; dw = Math.round(STAMP_H * asp);
+          dy = 0; dx = Math.round((STAMP_W - dw) / 2);
+        }
+        ctx.drawImage(src, sx, sy, cw, ch, dx, dy, dw, dh);
+        if (autoBG)  removeCellBG(ctx, STAMP_W, STAMP_H, tol);
+        if (autoFit) autoFitContent(ctx, STAMP_W, STAMP_H, 10);
+        result.push(out);
+      }
+    }
+    if (ab==='A') cellsA=result; else cellsB=result;
+    mainIdx = -1; tabIdx = -1;
+    btn.disabled=false; btn.textContent=`✂️ シート${ab}を分割する`;
+    const msg=document.getElementById(ab==='A'?'split-a-msg':'split-b-msg');
+    msg.style.display='block'; msg.textContent=`✅ シート${ab}を ${result.length}枚 に分割しました`;
+    document.getElementById(ab==='A'?'a-done-badge':'b-done-badge').style.display='flex';
+    goStep(ab==='A' ? 4 : 5);
+  }, 30);
+}
+
+// 透明でないピクセルの範囲を検出し、余白を詰めて最大化する
+function autoFitContent(ctx, w, h, margin) {
+  margin = margin || 10;
+  const id = ctx.getImageData(0, 0, w, h);
+  const d  = id.data;
+  let minX = w, maxX = -1, minY = h, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] > 10) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return;
+  const contentW = maxX - minX + 1;
+  const contentH = maxY - minY + 1;
+  const availW = w - margin * 2;
+  const availH = h - margin * 2;
+  const scale = Math.min(availW / contentW, availH / contentH);
+  const dw = Math.round(contentW * scale);
+  const dh = Math.round(contentH * scale);
+  const dx = Math.round((w - dw) / 2);
+  const dy = Math.round((h - dh) / 2);
+  const tmp = document.createElement('canvas');
+  tmp.width = contentW; tmp.height = contentH;
+  tmp.getContext('2d').putImageData(id, -minX, -minY);
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(tmp, 0, 0, contentW, contentH, dx, dy, dw, dh);
+}
+
+function removeCellBG(ctx, w, h, tol) {
+  const id=ctx.getImageData(0,0,w,h); const d=id.data;
+  const vis=new Uint8Array(w*h); const q=[];
+  function isBG(i){return d[i*4+3]<10||(d[i*4]>=255-tol&&d[i*4+1]>=255-tol&&d[i*4+2]>=255-tol);}
+  function tryA(x,y){if(x<0||x>=w||y<0||y>=h)return;const i=y*w+x;if(vis[i])return;if(isBG(i)){vis[i]=1;q.push(i);}}
+  for(let x=0;x<w;x++){tryA(x,0);tryA(x,h-1);}
+  for(let y=0;y<h;y++){tryA(0,y);tryA(w-1,y);}
+  while(q.length){const i=q.shift();d[i*4+3]=0;const x=i%w,y=Math.floor(i/w);tryA(x-1,y);tryA(x+1,y);tryA(x,y-1);tryA(x,y+1);}
+  ctx.putImageData(id,0,0);
+}
+
+// ======================================================
+// STEP 5：メイン＆タブ画像選択
+// ======================================================
+function setSelMode(mode) {
+  selMode = mode;
+  document.getElementById('mode-main-btn').className = 'sel-mode-btn' + (mode==='main' ? ' active-main' : '');
+  document.getElementById('mode-tab-btn').className  = 'sel-mode-btn' + (mode==='tab'  ? ' active-tab'  : '');
+}
+
+function renderThumbs() {
+  const cells = getAllCells();
+  const colsA = parseInt(document.getElementById('a-cols').value)||5;
+  const grid  = document.getElementById('thumbs-grid');
+  grid.style.gridTemplateColumns = `repeat(${Math.min(colsA, 8)},1fr)`;
+  grid.innerHTML = '';
+  if (cells.length === 0) {
+    grid.innerHTML = '<p style="color:#999;grid-column:1/-1;padding:12px;">先にSTEP 3・4で分割してください。</p>';
+    return;
+  }
+  const banner = document.getElementById('split-banner');
+  if (cellsA.length > 0 || cellsB.length > 0) {
+    banner.style.display = 'block';
+    let t = `✅ 合計 ${cells.length}枚`;
+    if (cellsA.length > 0) t += `（シートA: ${cellsA.length}枚`;
+    if (cellsA.length > 0 && cellsB.length > 0) t += ` ＋ シートB: ${cellsB.length}枚）`;
+    else if (cellsA.length > 0) t += '）';
+    else t += `（シートB: ${cellsB.length}枚）`;
+    banner.textContent = t;
+  }
+  cells.forEach((c, i) => {
+    if (i === cellsA.length && cellsB.length > 0 && cellsA.length > 0) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'grid-column:1/-1;padding:4px 0;font-size:0.78rem;color:#888;border-top:1px dashed #ddd;margin-top:4px;';
+      sep.textContent = '── シートB（21番〜）──';
+      grid.appendChild(sep);
+    }
+    const item = document.createElement('div');
+    item.className = 'thumb-item'
+      + (i === mainIdx ? ' sel-main' : '')
+      + (i === tabIdx  ? ' sel-tab'  : '');
+    item.onclick = () => selectImage(i);
+    const th = document.createElement('canvas');
+    th.width = c.width; th.height = c.height;
+    th.getContext('2d').drawImage(c, 0, 0);
+    const num = document.createElement('div');
+    num.className = 'thumb-num';
+    num.textContent = String(i+1).padStart(2,'0');
+    item.appendChild(th);
+    // バッジ表示
+    if (i === mainIdx) {
+      const b = document.createElement('div');
+      b.className = 'thumb-badge badge-main'; b.textContent = 'M';
+      item.appendChild(b);
+    }
+    if (i === tabIdx) {
+      const b = document.createElement('div');
+      b.className = 'thumb-badge badge-tab';
+      b.style.left = (i === mainIdx ? '22px' : '0');
+      b.textContent = 'T';
+      item.appendChild(b);
+    }
+    item.appendChild(num);
+    grid.appendChild(item);
+  });
+}
+
+function selectImage(i) {
+  if (selMode === 'main') {
+    mainIdx = i;
+    document.getElementById('main-ok').style.display = 'block';
+    document.getElementById('main-name').textContent = String(i+1).padStart(2,'0') + '.png';
+  } else {
+    tabIdx = i;
+    document.getElementById('tab-ok').style.display = 'block';
+    document.getElementById('tab-name').textContent = String(i+1).padStart(2,'0') + '.png';
+  }
+  renderThumbs();
+}
+
+// ======================================================
+// STEP 6：ZIP出力
+// ======================================================
+function refreshZipInfo() {
+  const cells = getAllCells();
+  const valid = [8,16,24,32,40];
+  document.getElementById('z-count').textContent =
+    cells.length > 0
+      ? `${cells.length}枚（01.png ～ ${String(cells.length).padStart(2,'0')}.png）` + (valid.includes(cells.length) ? ' ✅' : ' ⚠️ LINEの規定枚数（8/16/24/32/40）ではありません')
+      : '－（STEP 3・4で分割してください）';
+
+  const mainEl = document.getElementById('z-main');
+  if (mainIdx >= 0) { mainEl.textContent = String(mainIdx+1).padStart(2,'0') + '.pngを使用'; mainEl.style.color='#2e7d32'; }
+  else              { mainEl.textContent = '未選択（STEP 5で選んでください）'; mainEl.style.color='#c62828'; }
+
+  const tabEl = document.getElementById('z-tab');
+  if (tabIdx >= 0)  { tabEl.textContent = String(tabIdx+1).padStart(2,'0') + '.pngを使用'; tabEl.style.color='#2e7d32'; }
+  else              { tabEl.textContent = '未選択（STEP 5で選んでください）'; tabEl.style.color='#c62828'; }
+
+  const warns = [];
+  if (cells.length === 0) warns.push('分割されていません（STEP 3・4へ）');
+  if (!valid.includes(cells.length) && cells.length > 0) warns.push(`枚数が${cells.length}枚です（8/16/24/32/40のいずれかにしてください）`);
+  if (mainIdx < 0) warns.push('メイン画像が未選択（STEP 5へ）');
+  if (tabIdx  < 0) warns.push('タブ画像が未選択（STEP 5へ）');
+  const w = document.getElementById('z-warn');
+  if (warns.length) { w.style.display='block'; w.textContent='⚠️ '+warns.join(' / '); }
+  else w.style.display='none';
+}
+
+async function downloadZip() {
+  const cells = getAllCells();
+  if (!cells.length) { alert('STEP 3・4でシートを分割してください'); return; }
+  if (mainIdx < 0)   { alert('STEP 5でメイン画像を選択してください'); return; }
+  if (tabIdx  < 0)   { alert('STEP 5でタブ画像を選択してください'); return; }
+  const st = document.getElementById('z-status');
+  st.style.display='block'; st.className='status status-info'; st.textContent='⏳ ZIP作成中...';
+  try {
+    const zip = new JSZip();
+    // スタンプ画像（01.png〜）
+    for (let i=0; i<cells.length; i++) {
+      zip.file(String(i+1).padStart(2,'0')+'.png', await toBlob(cells[i]));
+    }
+    // メイン画像（240×240）
+    const mc = document.createElement('canvas'); mc.width=240; mc.height=240;
+    const mctx = mc.getContext('2d');
+    const ms = cells[mainIdx];
+    const mscale = Math.min(240/ms.width, 240/ms.height);
+    const mdw = Math.round(ms.width*mscale), mdh = Math.round(ms.height*mscale);
+    mctx.drawImage(ms, 0, 0, ms.width, ms.height, Math.round((240-mdw)/2), Math.round((240-mdh)/2), mdw, mdh);
+    zip.file('main.png', await toBlob(mc));
+    // タブ画像（96×74）
+    const tc = document.createElement('canvas'); tc.width=96; tc.height=74;
+    tc.getContext('2d').drawImage(cells[tabIdx], 0, 0, 96, 74);
+    zip.file('tab.png', await toBlob(tc));
+    saveAs(await zip.generateAsync({type:'blob'}), 'line-stamp.zip');
+    st.className='status status-ok'; st.textContent='✅ ダウンロード完了！ZIPファイルを確認してください。';
+  } catch(e) { st.className='status status-err'; st.textContent='エラー: '+e.message; }
+}
+
+function toBlob(cv) { return new Promise(res => cv.toBlob(res, 'image/png')); }
+</script>
+</body>
+</html>
