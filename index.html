@@ -927,9 +927,8 @@ function splitSheet(ab) {
     }
     if (ab==='A') cellsA=result; else cellsB=result;
     mainIdx = -1; tabIdx = -1;
-    btn.disabled=false; btn.textContent=`✂️ シート${ab}を分割する`;
-    const msg=document.getElementById(ab==='A'?'split-a-msg':'split-b-msg');
-    msg.style.display='block'; msg.textContent=`✅ シート${ab}を ${result.length}枚 に分割しました`;
+    btn.disabled=false;
+    btn.textContent = ab==='A' ? '✂️ シートAを分割してSTEP4へ →' : '✂️ シートBを分割してSTEP5へ →';
     document.getElementById(ab==='A'?'a-done-badge':'b-done-badge').style.display='flex';
     goStep(ab==='A' ? 4 : 5);
   }, 30);
