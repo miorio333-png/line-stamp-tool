@@ -387,18 +387,6 @@ input[type="number"] {
     </div>
     <div style="margin-top:12px;padding:10px 14px;background:#f0f7fd;border-radius:8px;border:1px solid #b3d4f0;">
       <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="a-auto-bg" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
-        <span>✅ 分割後に各セルの<strong>白背景を自動で透過</strong>する</span>
-      </label>
-      <div id="auto-bg-note-a" style="display:none;margin-top:6px;font-size:0.8rem;padding:6px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;">
-        ⚠️ STEP 0 で保護ブラシを使ったため、自動透過を <strong>OFF</strong> にしました。チェックを入れたままだと保護が無視されます。
-      </div>
-      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:0.82rem;color:#555;">透過の強さ：</span>
-        <input type="range" id="a-cell-tol" min="0" max="80" value="30" style="flex:1;accent-color:#0f7dc2;" oninput="document.getElementById('a-v-cell-tol').textContent=this.value">
-        <span id="a-v-cell-tol" style="font-size:0.82rem;color:#333;width:24px;text-align:right;">30</span>
-      </div>
-      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;margin-top:10px;">
         <input type="checkbox" id="a-auto-fit" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
         <span>🔍 余白を自動で詰めて<strong>イラストを最大化</strong>する（推奨）</span>
       </label>
@@ -406,14 +394,10 @@ input[type="number"] {
         透明ピクセルを除いた実体部分を検出し、370×320pxいっぱいに拡大します（安全余白10px）
       </div>
     </div>
-    <div style="margin-top:10px;">
-      <button class="btn btn-blue" id="split-a-btn" onclick="splitSheet('A')">✂️ シートAを分割する</button>
-    </div>
-    <div id="split-a-msg" style="display:none;" class="status status-ok"></div>
   </div>
   <div class="nav-buttons">
     <button class="btn btn-gray" onclick="goStep(2)">← STEP 2</button>
-    <button class="btn btn-blue" onclick="goStep(4)">STEP 4へ →</button>
+    <button class="btn btn-blue" id="split-a-btn" onclick="splitSheet('A')">✂️ シートAを分割してSTEP 4へ →</button>
   </div>
 </div>
 
@@ -449,15 +433,7 @@ input[type="number"] {
         <input type="checkbox" id="b-auto-bg" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
         <span>✅ 分割後に各セルの<strong>白背景を自動で透過</strong>する</span>
       </label>
-      <div id="auto-bg-note-b" style="display:none;margin-top:6px;font-size:0.8rem;padding:6px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;">
-        ⚠️ STEP 1 で保護ブラシを使ったため、自動透過を <strong>OFF</strong> にしました。チェックを入れたままだと保護が無視されます。
-      </div>
-      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-        <span style="font-size:0.82rem;color:#555;">透過の強さ：</span>
-        <input type="range" id="b-cell-tol" min="0" max="80" value="30" style="flex:1;accent-color:#0f7dc2;" oninput="document.getElementById('b-v-cell-tol').textContent=this.value">
-        <span id="b-v-cell-tol" style="font-size:0.82rem;color:#333;width:24px;text-align:right;">30</span>
-      </div>
-      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;margin-top:10px;">
+      <label style="font-size:0.88rem;cursor:pointer;display:flex;align-items:center;gap:8px;">
         <input type="checkbox" id="b-auto-fit" checked style="width:16px;height:16px;accent-color:#0f7dc2;">
         <span>🔍 余白を自動で詰めて<strong>イラストを最大化</strong>する（推奨）</span>
       </label>
@@ -465,14 +441,10 @@ input[type="number"] {
         透明ピクセルを除いた実体部分を検出し、370×320pxいっぱいに拡大します（安全余白10px）
       </div>
     </div>
-    <div style="margin-top:10px;">
-      <button class="btn btn-blue" id="split-b-btn" onclick="splitSheet('B')">✂️ シートBを分割する</button>
-    </div>
-    <div id="split-b-msg" style="display:none;" class="status status-ok"></div>
   </div>
   <div class="nav-buttons">
     <button class="btn btn-gray" onclick="goStep(3)">← STEP 3</button>
-    <button class="btn btn-blue" onclick="goStep(5)">STEP 5へ →</button>
+    <button class="btn btn-blue" id="split-b-btn" onclick="splitSheet('B')">✂️ シートBを分割してSTEP 5へ →</button>
   </div>
 </div>
 
@@ -702,17 +674,6 @@ function reapplyAndCommit(ab) {
   applyBG(ab);
   commitSheet(ab);
   const s = state[ab];
-  const hasProtect = s.protMask && s.protMask.some(v => v > 0);
-  if (hasProtect) {
-    const chkId = ab === 'A' ? 'a-auto-bg' : 'b-auto-bg';
-    const chk = document.getElementById(chkId);
-    if (chk && chk.checked) {
-      chk.checked = false;
-      const noteId = ab === 'A' ? 'auto-bg-note-a' : 'auto-bg-note-b';
-      const note = document.getElementById(noteId);
-      if (note) { note.style.display = 'block'; note.style.color = '#e65100'; }
-    }
-  }
 }
 
 function commitSheet(ab) {
@@ -937,9 +898,7 @@ function splitSheet(ab) {
   btn.disabled = true; btn.textContent = '⏳ 分割中...';
   setTimeout(() => {
     const p       = getGridParams(ab);
-    const autoBG  = document.getElementById(ab==='A'?'a-auto-bg':'b-auto-bg').checked;
     const autoFit = document.getElementById(ab==='A'?'a-auto-fit':'b-auto-fit').checked;
-    const tol     = parseInt(document.getElementById(ab==='A'?'a-cell-tol':'b-cell-tol').value)||30;
     const cw = (src.width  - p.mgL - p.mgR - p.gapH*(p.cols-1)) / p.cols;
     const ch = (src.height - p.mgT - p.mgB - p.gapV*(p.rows-1)) / p.rows;
     const result = [];
@@ -962,7 +921,6 @@ function splitSheet(ab) {
           dy = 0; dx = Math.round((STAMP_W - dw) / 2);
         }
         ctx.drawImage(src, sx, sy, cw, ch, dx, dy, dw, dh);
-        if (autoBG)  removeCellBG(ctx, STAMP_W, STAMP_H, tol);
         if (autoFit) autoFitContent(ctx, STAMP_W, STAMP_H, 10);
         result.push(out);
       }
